@@ -1,0 +1,116 @@
+---
+title: "KNN"
+output: html_document
+date: "2023-04-19"
+---
+
+```{r knn}
+# Load the required packages
+library(caret)
+library(pROC)
+
+# Load the heart disease dataset
+heart_data <- read.csv("heart.csv")
+
+# Convert the target variable to a factor
+heart_data$target <- factor(heart_data$target)
+
+# Split the dataset into training and testing sets
+set.seed(123)
+trainIndex <- createDataPartition(heart_data$target, p = 0.8, list = FALSE)
+trainData <- heart_data[trainIndex, ]
+testData <- heart_data[-trainIndex, ]
+
+# Create a KNN model with k=5
+knn_model <- train(target ~., data = trainData, method = "knn", trControl = trainControl(method = "cv"), tuneLength = 10, metric = "Sensitivity")
+
+# Print the model summary
+knn_model
+
+# Make predictions on the testing set
+predictions <- predict(knn_model, testData)
+
+# Evaluate the model using the recall metric
+confusionMatrix(predictions, testData$target, mode="prec_recall")$byClass["Recall"]
+```
+
+
+```{r svm}
+# Load required libraries
+library(rmarkdown)
+library(rstudioapi)  # External library of functions
+library(e1071)
+library(caret)
+
+# Get the path of the current open file and set the working directory to its folder
+current_path = rstudioapi::getActiveDocumentContext()$path 
+setwd(dirname(current_path ))
+
+# Clear the environment
+rm(list=ls())
+cat("\014")  # Clear the console
+
+# Load data
+heart <- read.csv("heart.csv")
+head(heart)
+
+# Convert target variable to factor
+heart$target <- as.factor(heart$target)
+
+# Split data into training, testing and validation sets
+data_rows <- 1:nrow(heart)
+train_rows <- sample(data_rows, 200, replace = FALSE)  # 200 observations for training
+train <- heart[train_rows,]
+test_rows <- sample(setdiff(data_rows, train_rows), 100, replace = FALSE)  # 100 observations for testing
+test <- heart[test_rows,]
+valid_rows <- setdiff(data_rows, c(train_rows, test_rows))  # Remaining observations for validation
+valid <- heart[valid_rows,]
+
+# Tune a support vector classifier
+set.seed(25)
+tune.out <- tune(svm, target ~ ., data = train, kernel = "linear", ranges = list(cost = c(0.1, 1, 5, 10, 50, 100)))
+summary(tune.out)
+bestmod <- tune.out$best.model
+summary(bestmod)
+
+# Predict best model on the test data and check accuracy
+predict.y <- predict(bestmod, test)
+table(predict.y, test$target)
+mean(predict.y == test$target)
+
+# radial kernel
+# tuning on cost and gamma
+tune.out <- tune(svm, target ~ ., data = train, kernel = "radial", ranges = list(cost = c(0.1, 0.5, 1), gamma = c(0.5, 1, 2, 3, 4)))
+summary(tune.out)
+bestmod <- tune.out$best.model
+summary(bestmod)
+
+# Predict using your best model on the test data and check accuracy
+predict.y <- predict(bestmod, test)
+table(predict.y, test$target)
+mean(predict.y == test$target)
+
+# polynomial kernel
+tune.out <- tune(svm, target ~ ., data = train, kernel = "polynomial", ranges = list(cost = c(0.1, 0.5, 1), degree = c(2, 3, 4)))
+summary(tune.out)
+bestmod <- tune.out$best.model
+summary(bestmod)
+
+# Predict best model on the test data and check accuracy
+predict.y <- predict(bestmod, test)
+table(predict.y, test$target)
+mean(predict.y == test$target)
+
+# confusion matrix
+cm <- confusionMatrix(predict.y, test$target)
+cm
+
+# plotting the accuracy and cost
+plot(tune.out)
+
+# printing the best model's accuracy and cost values
+cat("\n\nBest cost value for the SVM model: ", bestmod$cost, "\nBest gamma value for the SVM model: ", bestmod$gamma,
+    "\nBest degree value for the SVM model: ", bestmod$degree)
+
+# printing the accuracy of the best model
+cat("\n\nAccuracy of the best SVM model: ", cm$overall['Accuracy'])
